@@ -1,0 +1,6 @@
+# The app itself runs fine on just the Python standard library (browser
+# fallback windowing). Optional native OS window (desktop.py) needs pywebview.
+pywebview>=5.0
+
+# For BUILDING the standalone .exe (scripts/build_exe.bat):
+pyinstaller>=6.0

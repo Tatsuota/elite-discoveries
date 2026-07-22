@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Elite Discoveries — First Discovery Log</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2 L22 12 L12 22 L2 12 Z' fill='%23a52fff'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="booting">
+<div id="scanlines"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">&#9670;</span>
+    <div class="brand-text">
+      <h1>ELITE&nbsp;DISCOVERIES</h1>
+      <p class="subtitle">First Discovery Log &mdash; <span id="cmdr">CMDR</span></p>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span id="journalInfo" class="journal-info"></span>
+    <button id="changeCmdrBtn" class="btn ghost" title="Choose which commander to read">
+      <span class="btn-ic">&#8644;</span> CMDR
+    </button>
+    <button id="settingsBtn" class="btn ghost" title="Optional: Inara / EDSM profile">
+      <span class="btn-ic">&#9881;</span> API
+    </button>
+    <button id="refreshBtn" class="btn" title="Re-scan your journal files">
+      <span class="btn-ic">&#10227;</span> REFRESH
+    </button>
+  </div>
+</header>
+
+<section id="cmdrCard" class="cmdr-card" hidden></section>
+
+<nav class="view-tabs" id="viewTabs">
+  <button class="vtab active" data-view="discoveries">&#9670; DISCOVERIES</button>
+  <button class="vtab" data-view="codex">&#11041; CODEX</button>
+</nav>
+
+<section id="stats" class="stats-strip"></section>
+
+<section class="controls">
+  <div class="search-wrap">
+    <span class="search-ic">&#9906;</span>
+    <input id="search" type="text" placeholder="SEARCH SYSTEM OR BODY..." autocomplete="off">
+  </div>
+  <div class="filters" id="filters">
+    <button class="chip" data-filter="systemFirst">System Tag</button>
+    <button class="chip" data-filter="earthlike">Earthlike</button>
+    <button class="chip" data-filter="waterWorld">Water World</button>
+    <button class="chip" data-filter="ammonia">Ammonia</button>
+    <button class="chip" data-filter="terraformable">Terraformable</button>
+    <button class="chip" data-filter="bio">Bio Signals</button>
+  </div>
+  <div class="sort-wrap">
+    <label for="sort">SORT</label>
+    <select id="sort">
+      <option value="recent">Most Recent</option>
+      <option value="name">Name (A&ndash;Z)</option>
+      <option value="bodies">Most Bodies</option>
+      <option value="nearest">Nearest First</option>
+    </select>
+  </div>
+</section>
+
+<section class="from-bar">
+  <span class="from-lbl">FROM</span>
+  <div class="from-input-wrap">
+    <input id="fromInput" type="text" placeholder="SYSTEM NAME (e.g. where you are now)" autocomplete="off">
+  </div>
+  <button id="fromCurrent" class="btn ghost" title="Use your current in-game location from the journals">
+    <span class="btn-ic">&#8982;</span> USE CURRENT
+  </button>
+  <button id="fromClear" class="btn ghost" hidden title="Clear reference point">&times; CLEAR</button>
+  <span id="fromStatus" class="from-status"></span>
+</section>
+
+<div id="resultMeta" class="result-meta"></div>
+<main id="systemList" class="system-list"></main>
+
+<main id="codexView">
+  <section id="codexStats" class="stats-strip"></section>
+  <div id="codexList" class="codex-list"></div>
+</main>
+
+<section id="authGate" class="auth-gate">
+  <div class="gate-card">
+    <h2>SELECT YOUR COMMANDER</h2>
+    <p>Your journals can hold several Elite Dangerous characters. Choose which one
+      to read &mdash; only that commander's discoveries are shown, the rest are ignored.</p>
+    <div id="commanderList" class="commander-list"></div>
+    <p class="gate-sub">Connecting Inara/EDSM (the <b>API</b> button) is optional and
+      just adds your profile.</p>
+  </div>
+</section>
+
+<div id="loading" class="loading">
+  <div class="spinner"></div>
+  <p>READING FLIGHT LOGS&hellip;</p>
+</div>
+
+<footer class="footer">
+  <span>Discoveries read locally from your Elite Dangerous journals for the attached commander. Keys stay in <code>config.json</code> on this machine.</span>
+  <span id="genTime"></span>
+</footer>
+
+<!-- ===================== API settings modal ===================== -->
+<div id="settingsModal" class="modal" hidden>
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-label="API settings">
+    <div class="modal-head">
+      <h2>&#9881; CMDR API HOOKS</h2>
+      <button class="modal-x" data-close title="Close">&times;</button>
+    </div>
+    <p class="modal-intro">
+      <b>Optional.</b> You choose which commander to read with the <b>&#8644; CMDR</b>
+      button &mdash; no API needed. Connect <b>Inara</b> or <b>EDSM</b> here only to show
+      your profile (ranks, allegiance, squadron, ship) above the log. Keys are stored
+      only in <code>config.json</code> on this machine and are never echoed back to the page.
+    </p>
+
+    <div id="settingsStatus" class="settings-status" hidden></div>
+
+    <!-- Frontier OAuth login (the login Inara uses) -->
+    <div class="provider login-section">
+      <div class="provider-head">
+        <span class="provider-name">FRONTIER LOGIN</span>
+        <span id="frontierState" class="provider-state">not connected</span>
+      </div>
+      <p class="provider-hint">
+        Sign in with your Frontier account (OAuth2 + PKCE) to read live commander
+        data &mdash; the same login Inara uses. Needs an OAuth <b>client_id</b> issued
+        to approved developers at
+        <a href="https://user.frontierstore.net/" target="_blank" rel="noopener">user.frontierstore.net</a>,
+        with the redirect URI set to <code id="redirectUri">http://127.0.0.1:8765/oauth/callback</code>.
+        Without a client_id this stays disabled &mdash; add an API key below instead.
+      </p>
+      <label>OAuth client_id <span class="opt">(advanced)</span>
+        <input type="password" id="frontierClient" autocomplete="off" placeholder="leave blank to keep saved id">
+      </label>
+      <button id="frontierConnect" class="btn" type="button">Connect with Frontier</button>
+    </div>
+
+    <div class="section-divider"><span>OR ADD AN API KEY</span></div>
+
+    <!-- Inara -->
+    <div class="provider">
+      <div class="provider-head">
+        <span class="provider-name">INARA</span>
+        <span id="inaraState" class="provider-state">not connected</span>
+      </div>
+      <label>API key
+        <input type="password" id="inaraKey" autocomplete="off" placeholder="leave blank to keep saved key">
+      </label>
+      <label>CMDR name
+        <input type="text" id="inaraCmdr" autocomplete="off" placeholder="In-game commander name">
+      </label>
+      <p class="provider-hint">Get a key at
+        <a href="https://inara.cz/settings-api/" target="_blank" rel="noopener">inara.cz &rsaquo; Settings &rsaquo; API keys</a>.</p>
+    </div>
+
+    <!-- EDSM -->
+    <div class="provider">
+      <div class="provider-head">
+        <span class="provider-name">EDSM</span>
+        <span id="edsmState" class="provider-state">not connected</span>
+      </div>
+      <label>API key <span class="opt">(optional for public profiles)</span>
+        <input type="password" id="edsmKey" autocomplete="off" placeholder="leave blank to keep saved key">
+      </label>
+      <label>CMDR name
+        <input type="text" id="edsmCmdr" autocomplete="off" placeholder="In-game commander name">
+      </label>
+      <p class="provider-hint">Get a key at
+        <a href="https://www.edsm.net/en/settings/api" target="_blank" rel="noopener">edsm.net &rsaquo; Settings &rsaquo; API</a>.</p>
+    </div>
+
+    <div class="modal-foot">
+      <button id="settingsSave" class="btn primary">SAVE &amp; FETCH CMDR</button>
+      <button class="btn ghost" data-close>CLOSE</button>
+    </div>
+  </div>
+</div>
+
+<script src="icons.js"></script>
+<script src="portraits.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

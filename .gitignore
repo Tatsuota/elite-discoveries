@@ -1,0 +1,12 @@
+# Build artifacts (PyInstaller)
+/*.exe
+/build/
+/.venv/
+*.spec
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Local user state — selected commander and any API keys
+config.json
