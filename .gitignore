@@ -1,5 +1,4 @@
 # Build artifacts (PyInstaller)
-/*.exe
 /build/
 /.venv/
 *.spec
