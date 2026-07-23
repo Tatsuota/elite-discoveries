@@ -65,7 +65,11 @@ async function loadDiscoveries() {
     revealApp();
     render();
   } catch (e) {
-    $("#systemList").innerHTML = `<div class="empty">Could not load data.<br>${e}</div>`;
+    revealApp();   // never leave the error in a container hidden by body.booting
+    $("#systemList").innerHTML =
+      `<div class="empty">Could not load your discoveries.<br>` +
+      `Make sure the server is running, then press REFRESH.<br>` +
+      `<span class="err">${escapeHtml(String(e && e.message || e))}</span></div>`;
   } finally {
     showLoading(false);
   }
@@ -389,10 +393,22 @@ function systemSummary(sys) {
     [sys.discoveredAt ? fmtDate(sys.discoveredAt) : "—", "discovered"],
   ];
 
+  // System context (populated bubble systems) + scan-completeness note.
+  const has = (v) => v && v !== "None";   // ED reports unpopulated systems as "None"
+  const ctx = [];
+  if (has(sys.economy)) ctx.push(`<span class="pill">${escapeHtml(sys.economy)}</span>`);
+  if (has(sys.security)) ctx.push(`<span class="pill">${escapeHtml(sys.security)} security</span>`);
+  if (has(sys.allegiance)) ctx.push(`<span class="pill">${escapeHtml(sys.allegiance)}</span>`);
+  if (sys.population) ctx.push(`<span class="pill">pop ${fmtInt(sys.population)}</span>`);
+  if (sys.bodyCount && sys.scannedCount < sys.bodyCount) {
+    ctx.push(`<span class="pill warn">${sys.bodyCount - sys.scannedCount} bodies not scanned</span>`);
+  }
+
   return el("div", "sys-summary", `
     <div class="sys-summary-stats">
       ${stats.map(([v, l]) => `<div class="ssv"><b>${v}</b><span>${l}</span></div>`).join("")}
-    </div>`);
+    </div>
+    ${ctx.length ? `<div class="sys-context">${ctx.join("")}</div>` : ""}`);
 }
 
 // Text-only labels for what a system holds (shown on the collapsed bar).
@@ -463,6 +479,14 @@ function bodyCard(body) {
       body.rings.map((r) => `<span class="pill">${r.class}</span>`).join("") + `</div>`;
   }
 
+  // Named biological genuses found here (not just the count).
+  let genus = "";
+  const genuses = body.signals && body.signals.genuses;
+  if (genuses && genuses.length) {
+    genus = `<div class="bio-row">BIO: ${genuses.map((g) => `<span class="pill">${escapeHtml(g)}</span>`).join("")}</div>`;
+  }
+  const comp = compositionRow(body.composition);
+
   if (isPlanet) {
     const portrait = el("div", "portrait");
     portrait.innerHTML = window.PORTRAITS.body(body);
@@ -474,7 +498,7 @@ function bodyCard(body) {
     <div class="body-class">${escapeHtml(cls)}</div>
     <div class="badges">${badges.join("")}</div>
     <div class="body-stats">${stats}</div>
-    ${atmo}${rings}`));
+    ${atmo}${genus}${comp}${rings}`));
   return card;
 }
 
@@ -499,6 +523,7 @@ function starStats(b) {
     bstat("Surface temp", fmt(b.surfaceTemperature, 0, " K")),
     bstat("Age", b.ageMY != null ? fmt(b.ageMY, 0) + " MY" : "—"),
     bstat("Abs. magnitude", fmt(b.absoluteMagnitude, 2)),
+    b.rotationPeriodDays != null ? bstat("Rotation", fmtPeriod(b.rotationPeriodDays)) : "",
     bstat("Distance", fmt(b.distanceLS, 0, " ls")),
   ].join("");
 }
@@ -512,17 +537,43 @@ function planetStats(b) {
     bstat("Pressure", b.surfacePressure ? fmt(b.surfacePressure / 101325, 3, " atm") : "—"),
     bstat("Distance", fmt(b.distanceLS, 0, " ls")),
     bstat("Orbital period", fmtPeriod(b.orbitalPeriodDays)),
+    b.rotationPeriodDays != null ? bstat("Rotation", fmtPeriod(b.rotationPeriodDays)) : "",
+    b.semiMajorAxisAU != null ? bstat("Semi-major axis", fmt(b.semiMajorAxisAU, 3, " AU")) : "",
+    b.eccentricity != null ? bstat("Eccentricity", fmt(b.eccentricity, 3)) : "",
     bstat("Tidal lock", b.tidalLock ? "Yes" : "No"),
     b.volcanism ? bstat("Volcanism", titleCase(b.volcanism)) : "",
     b.terraformState ? bstat("Terraform", b.terraformState) : "",
+    b.probesUsed != null
+      ? bstat("Mapped", `${b.probesUsed} probe${b.probesUsed === 1 ? "" : "s"}` +
+          (b.efficiencyTarget && b.probesUsed <= b.efficiencyTarget ? " · efficient" : ""))
+      : "",
   ].join("");
+}
+
+// Rock/Metal/Ice makeup, shown like the atmosphere-composition pills.
+function compositionRow(comp) {
+  if (!comp) return "";
+  const parts = Object.entries(comp)
+    .filter(([, v]) => v > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, v]) => `<span class="pill">${escapeHtml(k)} ${fmt(v * 100, 0)}%</span>`);
+  return parts.length ? `<div class="atmo-row">COMPOSITION: ${parts.join("")}</div>` : "";
 }
 
 // ---- utils ----------------------------------------------------------------
 function titleCase(s) { return s.replace(/\b\w/g, (c) => c.toUpperCase()); }
 function escapeHtml(s) {
   return String(s == null ? "" : s)
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+// Only allow http(s) URLs into src/href; anything else (javascript:, data:, …) -> "".
+function safeUrl(u) {
+  if (!u) return "";
+  try {
+    const parsed = new URL(u, location.origin);
+    return /^https?:$/.test(parsed.protocol) ? escapeHtml(parsed.href) : "";
+  } catch (_) { return ""; }
 }
 function showLoading(on) { $("#loading").classList.toggle("show", on); }
 
@@ -651,8 +702,9 @@ function renderCmdrCard(p) {
     return;
   }
   const pr = p.profile;
-  const avatar = pr.avatarUrl
-    ? `<img class="cmdr-avatar" src="${pr.avatarUrl}" alt="" referrerpolicy="no-referrer">`
+  const avatarSrc = safeUrl(pr.avatarUrl);
+  const avatar = avatarSrc
+    ? `<img class="cmdr-avatar" src="${avatarSrc}" alt="" referrerpolicy="no-referrer">`
     : `<div class="cmdr-avatar ph">${escapeHtml((pr.commanderName || "?")[0].toUpperCase())}</div>`;
 
   const meta = [];
@@ -670,7 +722,8 @@ function renderCmdrCard(p) {
   }).join("");
 
   const links = [];
-  if (pr.profileUrl) links.push(`<a href="${pr.profileUrl}" target="_blank" rel="noopener">View profile ↗</a>`);
+  const profileHref = safeUrl(pr.profileUrl);
+  if (profileHref) links.push(`<a href="${profileHref}" target="_blank" rel="noopener">View profile ↗</a>`);
   const sources = Object.entries(p.providers || {})
     .filter(([, v]) => v.ok).map(([k]) => k.toUpperCase()).join(" · ");
 

@@ -451,6 +451,7 @@ class Parser:
         was_mapped = bool(e.get("WasMapped", True))
         was_foot = bool(e.get("WasFootfalled", True))
         mapped_by_me = (addr, bid) in self._saa
+        saa = self._saa.get((addr, bid))
         sig = self._signals.get((addr, bid))
 
         planet_class = e.get("PlanetClass") or None
@@ -475,6 +476,8 @@ class Parser:
             "firstMapped": first_mapped,
             "firstFootfall": bool(first_foot),
             "mappedByMe": mapped_by_me,
+            "probesUsed": saa.get("probesUsed") if saa else None,
+            "efficiencyTarget": saa.get("efficiencyTarget") if saa else None,
             # orbital
             "orbitalPeriodDays": _sec_to_days(e.get("OrbitalPeriod")),
             "rotationPeriodDays": _sec_to_days(e.get("RotationPeriod")),

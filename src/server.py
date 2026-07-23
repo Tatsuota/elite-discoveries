@@ -136,8 +136,14 @@ def load_config() -> dict:
 
 
 def save_config(cfg: dict) -> None:
-    with open(CONFIG_PATH, "w", encoding="utf-8") as fh:
+    # Atomic write: a crash or a concurrent save can't truncate config.json
+    # (which holds the selected commander + any API keys).
+    tmp = CONFIG_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(cfg, fh, indent=2)
+        fh.flush()
+        os.fsync(fh.fileno())
+    os.replace(tmp, CONFIG_PATH)
 
 
 def masked_config() -> dict:
@@ -183,14 +189,25 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *_):  # quiet console
         pass
 
-    def _send_json(self, obj):
+    def _send_json(self, obj, status=200):
         body = json.dumps(obj).encode("utf-8")
-        self.send_response(200)
+        self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(body)
+
+    def _cross_site(self) -> bool:
+        # True only when another site explicitly triggered this request; our own
+        # page sends "same-origin", direct navigation sends "none".
+        return self.headers.get("Sec-Fetch-Site", "") == "cross-site"
+
+    def _send_server_error(self, exc: Exception) -> None:
+        try:
+            self._send_json({"error": f"{type(exc).__name__}: {exc}"}, status=500)
+        except Exception:
+            pass
 
     def _send_file(self, path):
         ext = os.path.splitext(path)[1].lower()
@@ -221,16 +238,31 @@ class Handler(BaseHTTPRequestHandler):
             return {}
 
     def do_POST(self):
-        route = self.path.split("?", 1)[0]
-        if route == "/api/config":
-            update_config(self._read_body_json())
-            self._send_json({"ok": True, "config": masked_config()})
-            return
-        self.send_error(404)
+        try:
+            route = self.path.split("?", 1)[0]
+            if route == "/api/config":
+                if self._cross_site():
+                    self.send_error(403); return
+                update_config(self._read_body_json())
+                self._send_json({"ok": True, "config": masked_config()})
+                return
+            self.send_error(404)
+        except Exception as e:            # never drop the connection uncaught
+            self._send_server_error(e)
 
     def do_GET(self):
+        try:
+            self._dispatch_get()
+        except Exception as e:            # turn parser/route errors into JSON 500s
+            self._send_server_error(e)
+
+    def _dispatch_get(self):
         parsed = urlparse(self.path)
         route = parsed.path
+
+        # Cross-site pages must not be able to trigger expensive/side-effect routes.
+        if route in ("/api/refresh", "/oauth/login") and self._cross_site():
+            self.send_error(403); return
 
         if route == "/api/data":
             self._send_json(self._gated_data(force=False))
@@ -284,7 +316,7 @@ class Handler(BaseHTTPRequestHandler):
         # Static files (default to index.html).
         rel = "index.html" if route in ("/", "") else route.lstrip("/")
         target = os.path.normpath(os.path.join(WEB_DIR, rel))
-        if not target.startswith(WEB_DIR):  # path-traversal guard
+        if target != WEB_DIR and not target.startswith(WEB_DIR + os.sep):  # path-traversal guard
             self.send_error(403)
             return
         if not os.path.isfile(target):
