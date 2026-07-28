@@ -656,27 +656,50 @@ $("#refreshBtn").addEventListener("click", async () => {
 /* ===========================================================================
    API hooks — settings modal + CMDR profile
    =========================================================================== */
+// The commander-profile login (Inara / EDSM / Frontier) is in development and
+// is not shipped. The server reports `profileEnabled`; when it's off we hide
+// the whole surface and never call its endpoints.
+let PROFILE_ENABLED = false;
+
 async function initApi() {
-  // Optional profile only (Inara/EDSM/Frontier). Never gates the discovery data —
-  // that's gated by the local commander pick instead.
-  $("#redirectUri").textContent = `${location.origin}/oauth/callback`;
-  await loadSettings();
+  let cfg = null;
+  try { cfg = await (await fetch("/api/config")).json(); } catch (_) { /* offline */ }
+  PROFILE_ENABLED = !!(cfg && cfg.profileEnabled);
+
+  if (!PROFILE_ENABLED) {
+    const btn = $("#settingsBtn");        // top-bar "API" button
+    if (btn) btn.remove();
+    const modal = $("#settingsModal");
+    if (modal) modal.remove();
+    const card = $("#cmdrCard");
+    if (card) card.remove();
+    return;
+  }
+
+  const ru = $("#redirectUri");
+  if (ru) ru.textContent = `${location.origin}/oauth/callback`;
+  applySettings(cfg);
   await fetchCmdr();
   handleFrontierReturn();
 }
 
 async function loadSettings() {
+  if (!PROFILE_ENABLED) return;
   try {
-    const cfg = await (await fetch("/api/config")).json();
-    $("#inaraCmdr").value = cfg.inara.commander || "";
-    $("#edsmCmdr").value = cfg.edsm.commander || "";
-    setState("#inaraState", cfg.inara.hasKey && cfg.inara.commander);
-    setState("#edsmState", cfg.edsm.commander);
-    setState("#frontierState", cfg.frontier.connected);
-    $("#inaraKey").placeholder = cfg.inara.hasKey ? "•••••• (saved — blank keeps it)" : "API key";
-    $("#edsmKey").placeholder = cfg.edsm.hasKey ? "•••••• (saved — blank keeps it)" : "API key";
-    $("#frontierClient").placeholder = cfg.frontier.hasClientId ? "•••••• (saved)" : "OAuth client_id";
+    applySettings(await (await fetch("/api/config")).json());
   } catch (_) { /* offline */ }
+}
+
+function applySettings(cfg) {
+  if (!cfg || !cfg.profileEnabled) return;
+  $("#inaraCmdr").value = (cfg.inara && cfg.inara.commander) || "";
+  $("#edsmCmdr").value = (cfg.edsm && cfg.edsm.commander) || "";
+  setState("#inaraState", cfg.inara.hasKey && cfg.inara.commander);
+  setState("#edsmState", cfg.edsm.commander);
+  setState("#frontierState", cfg.frontier.connected);
+  $("#inaraKey").placeholder = cfg.inara.hasKey ? "•••••• (saved — blank keeps it)" : "API key";
+  $("#edsmKey").placeholder = cfg.edsm.hasKey ? "•••••• (saved — blank keeps it)" : "API key";
+  $("#frontierClient").placeholder = cfg.frontier.hasClientId ? "•••••• (saved)" : "OAuth client_id";
 }
 
 function setState(sel, on) {
@@ -687,6 +710,7 @@ function setState(sel, on) {
 }
 
 async function fetchCmdr() {
+  if (!PROFILE_ENABLED) return false;
   let payload;
   try {
     payload = await (await fetch("/api/cmdr")).json();
@@ -697,6 +721,7 @@ async function fetchCmdr() {
 
 function renderCmdrCard(p) {
   const card = $("#cmdrCard");
+  if (!card) return;                       // stripped from shipped builds
   if (!p || !p.ok || !p.profile || !p.profile.commanderName) {
     card.hidden = true;
     return;
@@ -753,10 +778,14 @@ function handleFrontierReturn() {
   history.replaceState({}, "", location.pathname);
 }
 
-function openSettings() { $("#settingsModal").hidden = false; }
-function closeSettings() { $("#settingsModal").hidden = true; $("#settingsStatus").hidden = true; }
+function openSettings() { const m = $("#settingsModal"); if (m) m.hidden = false; }
+function closeSettings() {
+  const m = $("#settingsModal"); if (m) m.hidden = true;
+  const s = $("#settingsStatus"); if (s) s.hidden = true;
+}
 function showSettingsStatus(kind, text) {
   const s = $("#settingsStatus");
+  if (!s) return;
   s.className = "settings-status " + kind;
   s.textContent = text;
   s.hidden = false;
@@ -766,22 +795,23 @@ $("#viewTabs").addEventListener("click", (e) => {
   const tab = e.target.closest(".vtab");
   if (tab) switchView(tab.dataset.view);
 });
-$("#settingsBtn").addEventListener("click", openSettings);
 $("#changeCmdrBtn").addEventListener("click", showCommanderPicker);
 $("#commanderList").addEventListener("click", (e) => {
   const btn = e.target.closest(".cmdr-pick");
   if (btn) selectCommander(btn.dataset.name);
 });
-$("#settingsModal").addEventListener("click", (e) => { if (e.target.dataset.close !== undefined) closeSettings(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSettings(); });
 
-$("#frontierConnect").addEventListener("click", async () => {
+// Profile-login controls exist only in dev builds — bind defensively.
+const on = (sel, ev, fn) => { const n = $(sel); if (n) n.addEventListener(ev, fn); };
+on("#settingsBtn", "click", openSettings);
+on("#settingsModal", "click", (e) => { if (e.target.dataset.close !== undefined) closeSettings(); });
+on("#frontierConnect", "click", async () => {
   // persist the client_id before redirecting to Frontier
   await saveSettings(true);
   location.href = "/oauth/login";
 });
-
-$("#settingsSave").addEventListener("click", () => saveSettings(false));
+on("#settingsSave", "click", () => saveSettings(false));
 
 async function saveSettings(silent) {
   const body = {

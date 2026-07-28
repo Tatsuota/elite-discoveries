@@ -26,10 +26,29 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-import api_clients
 import codex_parser
-import frontier_oauth
 import journal_parser
+
+# --------------------------------------------------------------------------- #
+#  IN-DEVELOPMENT FEATURE — commander profile login (Inara / EDSM / Frontier).
+#
+#  Not shipped yet. `api_clients.py` and `frontier_oauth.py` are deliberately
+#  excluded from the public repo and the released build, so these imports fail
+#  there and the whole feature stays inert (routes 404, UI hidden).
+#
+#  To work on it locally, keep those modules in src/ and launch with:
+#      ED_PROFILE=1        (PowerShell:  $env:ED_PROFILE = "1")
+# --------------------------------------------------------------------------- #
+try:
+    import api_clients
+    import frontier_oauth
+    _PROFILE_MODULES = True
+except ImportError:              # public/shipped build — modules not present
+    api_clients = None
+    frontier_oauth = None
+    _PROFILE_MODULES = False
+
+PROFILE_ENABLED = _PROFILE_MODULES and os.environ.get("ED_PROFILE") == "1"
 
 
 def _bundle_dir() -> str:
@@ -149,24 +168,29 @@ def save_config(cfg: dict) -> None:
 def masked_config() -> dict:
     """Never echo secrets back to the browser — just whether they're set."""
     cfg = load_config()
+    out = {"commander": cfg.get("commander", ""), "profileEnabled": PROFILE_ENABLED}
+    if not PROFILE_ENABLED:
+        return out            # shipped build: no provider surface at all
     inara = cfg.get("inara", {})
     edsm = cfg.get("edsm", {})
     frontier = cfg.get("frontier", {})
-    return {
-        "commander": cfg.get("commander", ""),
+    out.update({
         "inara": {"commander": inara.get("commander", ""), "hasKey": bool(inara.get("apiKey"))},
         "edsm": {"commander": edsm.get("commander", ""), "hasKey": bool(edsm.get("apiKey"))},
         "frontier": {"hasClientId": bool(frontier.get("clientId")),
                      "connected": _FRONTIER_PROFILE is not None},
-    }
+    })
+    return out
 
 
 def session_commander() -> str:
-    if _FRONTIER_PROFILE and _FRONTIER_PROFILE.get("commanderName"):
-        return _FRONTIER_PROFILE["commanderName"]
-    cfg = load_config()
-    return (cfg.get("inara", {}).get("commander")
-            or cfg.get("edsm", {}).get("commander") or "")
+    if PROFILE_ENABLED:
+        if _FRONTIER_PROFILE and _FRONTIER_PROFILE.get("commanderName"):
+            return _FRONTIER_PROFILE["commanderName"]
+        cfg = load_config()
+        return (cfg.get("inara", {}).get("commander")
+                or cfg.get("edsm", {}).get("commander") or "")
+    return (load_config().get("commander") or "")
 
 
 def update_config(incoming: dict) -> None:
@@ -174,14 +198,15 @@ def update_config(incoming: dict) -> None:
     cfg = load_config()
     if "commander" in incoming:               # locally selected commander
         cfg["commander"] = (incoming.get("commander") or "").strip()
-    for provider in ("inara", "edsm", "frontier"):
-        if provider not in incoming:
-            continue
-        section = cfg.setdefault(provider, {})
-        for k, v in incoming[provider].items():
-            if k in ("apiKey", "clientId") and v == "":
-                continue  # don't wipe a stored secret with a blank submit
-            section[k] = v
+    if PROFILE_ENABLED:                       # provider creds are dev-only for now
+        for provider in ("inara", "edsm", "frontier"):
+            if provider not in incoming:
+                continue
+            section = cfg.setdefault(provider, {})
+            for k, v in incoming[provider].items():
+                if k in ("apiKey", "clientId") and v == "":
+                    continue  # don't wipe a stored secret with a blank submit
+                section[k] = v
     save_config(cfg)
 
 
@@ -303,14 +328,18 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/api/config":
             self._send_json(masked_config())
             return
-        if route == "/api/cmdr":
-            self._send_json(self._commander_payload())
-            return
-        if route == "/oauth/login":
-            self._oauth_login()
-            return
-        if route == "/oauth/callback":
-            self._oauth_callback(parse_qs(parsed.query))
+        # Commander-profile login is in development and not shipped — these
+        # routes simply don't exist unless it's explicitly enabled.
+        if route in ("/api/cmdr", "/oauth/login", "/oauth/callback"):
+            if not PROFILE_ENABLED:
+                self.send_error(404)
+                return
+            if route == "/api/cmdr":
+                self._send_json(self._commander_payload())
+            elif route == "/oauth/login":
+                self._oauth_login()
+            else:
+                self._oauth_callback(parse_qs(parsed.query))
             return
 
         # Static files (default to index.html).
