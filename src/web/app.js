@@ -231,7 +231,10 @@ function buildStats() {
     ["systems first-discovered", fmtInt(t.systemsFirstDiscovered), ""],
     ["bodies first-discovered", fmtInt(t.bodiesFirstDiscovered), ""],
     ["bodies first-mapped", fmtInt(t.bodiesFirstMapped), "cyan"],
-    ["first footfalls", fmtInt(t.firstFootfalls), "gold"],
+    // "first footfalls" is hidden until we find a better signal. WasFootfalled
+    // is Odyssey-only and missing from most scans, so the journals can only
+    // confirm a fraction of the landings actually made — the total would read
+    // far lower than reality. `totals.firstFootfalls` is still computed.
     ["earthlikes", fmtInt(t.earthlikes), "green"],
     ["water worlds", fmtInt(t.waterWorlds), "cyan"],
     ["ammonia worlds", fmtInt(t.ammoniaWorlds), ""],
@@ -461,7 +464,10 @@ function bodyCard(body) {
   const badges = [];
   if (body.firstDiscovered) badges.push(badge("fd", "First Discovery"));
   if (body.firstMapped) badges.push(badge("fm", "First Mapped"));
-  if (body.firstFootfall) badges.push(badge("ff", "First Footfall"));
+  // First Footfall badge hidden with the stat — see buildStats(). The journals
+  // can only confirm a fraction of real landings, so marking a few bodies while
+  // leaving genuine ones unmarked reads as wrong. `body.firstFootfall` is still
+  // computed and ready when a better signal is found.
   if (body.terraformable) badges.push(badge("tf", "Terraformable"));
   if (body.landable) badges.push(badge("land", "Landable"));
   const bio = body.signals && body.signals.bio;

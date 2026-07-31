@@ -183,6 +183,8 @@ class Parser:
         self._bodies: dict[tuple, dict] = {}      # (sysaddr, bodyId) -> body
         self._saa: dict[tuple, dict] = {}         # mapped bodies (you scanned them)
         self._signals: dict[tuple, dict] = {}     # bio/geo/material signals
+        self._disembarked: set[tuple] = set()     # bodies we actually walked on
+        self._footfall_seen: dict[tuple, tuple] = {}   # key -> (ts, wasFootfalled)
         self.journal_count = 0
 
     def _active_ok(self) -> bool:
@@ -220,7 +222,7 @@ class Parser:
                         if not any(k in line for k in (
                             "Scan", "FSDJump", "Location", "CarrierJump",
                             "SAASignalsFound", "FSSBodySignals", "Commander",
-                            "LoadGame",
+                            "LoadGame", "Disembark",
                         )):
                             continue
                         try:
@@ -274,6 +276,15 @@ class Parser:
             sys["bodyCount"] = e.get("BodyCount")
             return
 
+        if ev == "Disembark":
+            # Getting out on foot is what earns a first footfall — a planet
+            # surface only (not a station/ship interior).
+            if e.get("OnPlanet"):
+                addr, bid = e.get("SystemAddress"), e.get("BodyID")
+                if addr is not None and bid is not None:
+                    self._disembarked.add((addr, bid))
+            return
+
         if ev == "SAAScanComplete":
             addr, bid = e.get("SystemAddress"), e.get("BodyID")
             if addr is not None and bid is not None:
@@ -315,6 +326,15 @@ class Parser:
         key = (addr, bid)
         self._system(addr, e.get("StarSystem"))
 
+        # `WasFootfalled` is Odyssey-only and absent from most FSS/auto scans, so
+        # the earliest scan we keep below often doesn't carry it. Remember the
+        # earliest scan that DOES report it — that's the state before we landed.
+        if "WasFootfalled" in e:
+            ts = e.get("timestamp", "")
+            prev = self._footfall_seen.get(key)
+            if prev is None or ts < prev[0]:
+                self._footfall_seen[key] = (ts, bool(e["WasFootfalled"]))
+
         # Keep the EARLIEST scan: it holds the true "already known?" state.
         # A later re-scan of a system you discovered would read WasDiscovered=true.
         if key in self._bodies:
@@ -340,6 +360,13 @@ class Parser:
             "terraformable": 0, "estimatedValue": 0,
         }
 
+        # Counted across ALL systems, not just the ones we list: footfalls
+        # usually happen in already-discovered systems. Not displayed yet (the
+        # journals confirm only a fraction of real landings) but kept truthful.
+        totals["firstFootfalls"] = sum(
+            1 for s in self.systems.values() for b in s["bodies"].values()
+            if b.get("firstFootfall"))
+
         for sys in self.systems.values():
             bodies = sorted(sys["bodies"].values(), key=lambda b: (b["bodyId"]))
             if not bodies:
@@ -355,11 +382,17 @@ class Parser:
             fm_bodies = [b for b in bodies if b["firstMapped"]]
             ff_bodies = [b for b in bodies if b["firstFootfall"]]
 
-            # Only surface systems where you discovered the system or any body.
-            if not (system_first or fd_bodies):
+            # Surface systems holding a "first" we actually display. First maps
+            # often happen in already-discovered systems, so keying this on
+            # first-discoveries alone hid them (and zeroed their totals).
+            # `ff_bodies` is deliberately NOT included: the footfall stat is
+            # hidden pending a better signal, so a footfall-only system would
+            # otherwise be listed with nothing to show for it.
+            if not (system_first or fd_bodies or fm_bodies):
                 continue
 
-            disc_times = [b["timestamp"] for b in fd_bodies if b.get("timestamp")]
+            disc_times = [b["timestamp"] for b in (fd_bodies or fm_bodies or ff_bodies)
+                          if b.get("timestamp")]
             sys_value = sum(b["estimatedValue"] for b in bodies)
 
             classes = {b.get("planetClass") for b in bodies}
@@ -412,7 +445,6 @@ class Parser:
                 totals["systemsFirstDiscovered"] += 1
             totals["bodiesFirstDiscovered"] += len(fd_bodies)
             totals["bodiesFirstMapped"] += len(fm_bodies)
-            totals["firstFootfalls"] += len(ff_bodies)
             totals["earthlikes"] += sum(1 for b in fd_bodies if b.get("planetClass") == "Earthlike body")
             totals["waterWorlds"] += sum(1 for b in fd_bodies if b.get("planetClass") == "Water world")
             totals["ammoniaWorlds"] += sum(1 for b in fd_bodies if b.get("planetClass") == "Ammonia world")
@@ -460,7 +492,14 @@ class Parser:
 
         first_disc = not was_disc
         first_mapped = mapped_by_me and not was_mapped
-        first_foot = not was_foot and btype == "planet" and e.get("Landable")
+        # A first footfall requires that we ACTUALLY disembarked on the body and
+        # that nobody had walked there when we scanned it. `WasFootfalled: false`
+        # on its own only means "un-footfalled at scan time" — an opportunity,
+        # not an achievement. The field is Odyssey-only, so `is False` keeps a
+        # missing field (older journals) from counting either way.
+        walked_here = (addr, bid) in self._disembarked
+        seen = self._footfall_seen.get((addr, bid))
+        first_foot = walked_here and seen is not None and seen[1] is False
 
         radius_m = e.get("Radius")
         body = {
