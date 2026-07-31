@@ -190,6 +190,11 @@ function codexEntryCard(e) {
 
 function lockApp() {
   document.body.classList.remove("booting");
+  // Leave the Codex view too, otherwise its pane stays visible behind the gate
+  // (body.view-codex and body.locked have equal specificity, so it would win).
+  document.body.classList.remove("view-codex");
+  document.querySelectorAll("#viewTabs .vtab").forEach((t) =>
+    t.classList.toggle("active", t.dataset.view === "discoveries"));
   document.body.classList.add("locked");
   showLoading(false);
 }
@@ -256,9 +261,13 @@ function applyView() {
     return true;
   });
 
-  // distance from the reference point (if one is set)
+  // Distance from the reference point. When the reference is cleared the old
+  // distances must go too, or a later "Nearest first" would silently sort by a
+  // reference that is no longer shown.
   if (REF && REF.pos) {
     for (const s of VIEW) s._dist = distanceLy(REF.pos, s.pos);
+  } else {
+    for (const s of DATA.systems) delete s._dist;
   }
 
   // Systems are always separated into Codex categories; the sort applies inside
@@ -641,18 +650,40 @@ $("#refreshBtn").addEventListener("click", async () => {
   const btn = $("#refreshBtn");
   btn.classList.add("spinning");
   btn.disabled = true;
+  const previous = DATA;
   try {
     const res = await fetch("/api/refresh");
-    DATA = await res.json();
-    if (DATA && DATA.needsCommander) { await showCommanderPicker(); return; }
+    if (!res.ok) throw new Error(`server returned ${res.status}`);
+    const fresh = await res.json();
+    if (fresh && fresh.needsCommander) { DATA = fresh; await showCommanderPicker(); return; }
+    DATA = fresh;
     CODEX = null;   // refresh re-reads journals; reload codex next time it's opened
     if (document.body.classList.contains("view-codex")) await loadCodex();
     render();
+    flashMeta("");
+  } catch (e) {
+    // Keep showing the previous data rather than a blank list, but say so —
+    // otherwise a failed refresh looks exactly like a successful one.
+    DATA = previous;
+    flashMeta(`Refresh failed (${e && e.message || e}) — showing the last successful scan.`);
   } finally {
     btn.classList.remove("spinning");
     btn.disabled = false;
   }
 });
+
+// Append a transient notice to the result-meta line (cleared on the next render).
+function flashMeta(msg) {
+  const el = $("#resultMeta");
+  if (!el) return;
+  const existing = el.querySelector(".meta-warn");
+  if (existing) existing.remove();
+  if (!msg) return;
+  const span = document.createElement("span");
+  span.className = "meta-warn";
+  span.textContent = "  ·  " + msg;
+  el.appendChild(span);
+}
 
 /* ===========================================================================
    API hooks — settings modal + CMDR profile

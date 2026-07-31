@@ -144,6 +144,7 @@ h1, h2, h3 { font-weight: 600; letter-spacing: 0.08em; margin: 0; }
 }
 
 .result-meta { padding: 12px 26px 4px; font-size: 12px; color: var(--text-dim); letter-spacing: 0.1em; }
+.meta-warn { color: var(--gold); }
 
 /* ---- FROM bar (nearest-first reference point) ---------------------------- */
 .from-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
@@ -421,9 +422,12 @@ body.view-codex .from-bar { display: none !important; }
 .btn.ghost { background: transparent; }
 .btn.primary { background: rgba(165,47,255,0.18); color: var(--amber-lt); }
 
+/* The `hidden` attribute must beat our own `display` rules — author rules
+   otherwise override the UA stylesheet and the element stays visible. */
+[hidden] { display: none !important; }
+
 /* ---- modal -------------------------------------------------------------- */
 .modal { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: flex-start; justify-content: center; }
-.modal[hidden] { display: none; }
 .modal-backdrop { position: absolute; inset: 0; background: rgba(4,2,8,0.72); backdrop-filter: blur(3px); }
 .modal-card {
   position: relative; margin: 6vh auto; width: min(560px, 92vw); max-height: 86vh; overflow-y: auto;
