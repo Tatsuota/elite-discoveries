@@ -117,7 +117,8 @@ async function loadCodex() {
   try {
     CODEX = await (await fetch("/api/codex")).json();
   } catch (e) {
-    list.innerHTML = `<div class="empty">Could not load Codex.<br>${e}</div>`;
+    list.innerHTML = `<div class="empty">Could not load Codex.<br>` +
+      `<span class="err">${escapeHtml(String(e && e.message || e))}</span></div>`;
     return;
   }
   if (CODEX.needsCommander) { CODEX = null; showCommanderPicker(); return; }
@@ -469,14 +470,14 @@ function bodyCard(body) {
   if (body.atmosphere && body.atmosphere !== "No atmosphere") {
     const comp = (body.atmosphereComposition || [])
       .slice(0, 4)
-      .map((c) => `<span class="pill">${c.Name} ${fmt(c.Percent, 1)}%</span>`)
+      .map((c) => `<span class="pill">${escapeHtml(c.Name)} ${fmt(c.Percent, 1)}%</span>`)
       .join("");
     atmo = `<div class="atmo-row">ATMOSPHERE: ${escapeHtml(body.atmosphere)}<br>${comp}</div>`;
   }
   let rings = "";
   if (body.rings && body.rings.length) {
     rings = `<div class="ring-row">${body.rings.length} RING${body.rings.length > 1 ? "S" : ""}: ` +
-      body.rings.map((r) => `<span class="pill">${r.class}</span>`).join("") + `</div>`;
+      body.rings.map((r) => `<span class="pill">${escapeHtml(r.class)}</span>`).join("") + `</div>`;
   }
 
   // Named biological genuses found here (not just the count).
@@ -541,8 +542,8 @@ function planetStats(b) {
     b.semiMajorAxisAU != null ? bstat("Semi-major axis", fmt(b.semiMajorAxisAU, 3, " AU")) : "",
     b.eccentricity != null ? bstat("Eccentricity", fmt(b.eccentricity, 3)) : "",
     bstat("Tidal lock", b.tidalLock ? "Yes" : "No"),
-    b.volcanism ? bstat("Volcanism", titleCase(b.volcanism)) : "",
-    b.terraformState ? bstat("Terraform", b.terraformState) : "",
+    b.volcanism ? bstat("Volcanism", escapeHtml(titleCase(b.volcanism))) : "",
+    b.terraformState ? bstat("Terraform", escapeHtml(b.terraformState)) : "",
     b.probesUsed != null
       ? bstat("Mapped", `${b.probesUsed} probe${b.probesUsed === 1 ? "" : "s"}` +
           (b.efficiencyTarget && b.probesUsed <= b.efficiencyTarget ? " · efficient" : ""))
