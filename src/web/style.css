@@ -464,7 +464,6 @@ body.view-codex .from-bar { display: none !important; }
 .provider.advanced { background: transparent; }
 .provider.advanced summary { cursor: pointer; font-size: 12.5px; letter-spacing: 0.08em; color: var(--amber-txt); }
 .provider.advanced code { color: var(--cyan); }
-.adv-tag { font-size: 9px; letter-spacing: 0.1em; padding: 1px 6px; border: 1px solid var(--line-soft); color: var(--text-dim); margin-left: 6px; text-transform: uppercase; }
 .provider.login-section { border-color: var(--line); background: linear-gradient(180deg, var(--panel-2), transparent); }
 .provider.login-section code { color: var(--cyan); }
 .provider.login-section button { margin-top: 2px; }
@@ -477,7 +476,6 @@ body.view-codex .from-bar { display: none !important; }
 
 @media (max-width: 720px) {
   .sys-head { grid-template-columns: auto 1fr auto; }
-  .sys-value { display: none; }
   .stat .num { font-size: 22px; }
   .cmdr-ranks { margin-left: 0; }
 }

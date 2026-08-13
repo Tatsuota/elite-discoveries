@@ -103,47 +103,8 @@ def star_color(star_type: str) -> str:
     return STAR_COLORS.get(star_type[0], "#ffd2a1")
 
 
-# --------------------------------------------------------------------------- #
-#  Approximate scan-value estimation (clearly labelled as an estimate in UI)
-# --------------------------------------------------------------------------- #
-_VALUE_K = {
-    "Metal rich body": 21790, "High metal content body": 9654,
-    "Earthlike body": 64831, "Water world": 64831, "Ammonia world": 96932,
-    "Sudarsky class I gas giant": 1656, "Sudarsky class II gas giant": 9654,
-    "Sudarsky class III gas giant": 300, "Sudarsky class IV gas giant": 300,
-    "Sudarsky class V gas giant": 300, "Water giant": 300,
-    "Helium rich gas giant": 300, "Helium gas giant": 300,
-    "Gas giant with water based life": 300,
-    "Gas giant with ammonia based life": 300,
-    "Rocky body": 500, "Icy body": 500, "Rocky ice body": 500,
-}
-_VALUE_K_TERRAFORM = {
-    "Metal rich body": 65631, "High metal content body": 100677,
-    "Rocky body": 93328, "Earthlike body": 116295, "Water world": 116295,
-}
-
-
-def estimate_body_value(planet_class, mass_em, terraformable,
-                        first_discovered, mapped, first_mapped) -> int:
-    """Rough credit value of a body scan (Horizons/Odyssey ballpark)."""
-    k = _VALUE_K.get(planet_class, 300)
-    if terraformable:
-        k += _VALUE_K_TERRAFORM.get(planet_class, 93328)
-    mass = mass_em if mass_em and mass_em > 0 else 1.0
-    q = 0.56591828
-    value = max(k + k * q * (mass ** 0.2), 500.0)
-
-    if mapped:
-        if first_discovered and first_mapped:
-            value *= 3.699622554
-        elif first_mapped:
-            value *= 8.0
-        else:
-            value *= 3.3333333333
-        value *= 1.25  # efficiency bonus (probes <= target)
-    if first_discovered:
-        value *= 2.6
-    return int(round(max(value, 500.0)))
+# Scan-value estimation used to live here. Credit values were removed from the
+# UI, so the tables and helpers were deleted rather than computed on every parse.
 
 
 # --------------------------------------------------------------------------- #
@@ -357,7 +318,7 @@ class Parser:
             "systemsFirstDiscovered": 0, "bodiesFirstDiscovered": 0,
             "bodiesFirstMapped": 0, "firstFootfalls": 0,
             "earthlikes": 0, "waterWorlds": 0, "ammoniaWorlds": 0,
-            "terraformable": 0, "estimatedValue": 0,
+            "terraformable": 0,
         }
 
         # Counted across ALL systems, not just the ones we list: footfalls
@@ -393,7 +354,6 @@ class Parser:
 
             disc_times = [b["timestamp"] for b in (fd_bodies or fm_bodies or ff_bodies)
                           if b.get("timestamp")]
-            sys_value = sum(b["estimatedValue"] for b in bodies)
 
             classes = {b.get("planetClass") for b in bodies}
             has_elw = "Earthlike body" in classes
@@ -431,7 +391,6 @@ class Parser:
                 "firstMappedCount": len(fm_bodies),
                 "firstFootfallCount": len(ff_bodies),
                 "discoveredAt": min(disc_times) if disc_times else None,
-                "estimatedValue": sys_value,
                 "category": category,
                 "flags": {
                     "earthlike": has_elw, "waterWorld": has_ww,
@@ -449,7 +408,6 @@ class Parser:
             totals["waterWorlds"] += sum(1 for b in fd_bodies if b.get("planetClass") == "Water world")
             totals["ammoniaWorlds"] += sum(1 for b in fd_bodies if b.get("planetClass") == "Ammonia world")
             totals["terraformable"] += sum(1 for b in fd_bodies if b.get("terraformable"))
-            totals["estimatedValue"] += sys_value
 
         # Newest discoveries first.
         out_systems.sort(key=lambda s: (s["discoveredAt"] or ""), reverse=True)
@@ -540,7 +498,6 @@ class Parser:
                 "surfaceTemperature": e.get("SurfaceTemperature"),
                 "absoluteMagnitude": e.get("AbsoluteMagnitude"),
                 "color": star_color(e.get("StarType")),
-                "estimatedValue": _star_value(e),
             })
         elif btype == "planet":
             body.update({
@@ -560,13 +517,7 @@ class Parser:
                 "landable": e.get("Landable"),
                 "composition": e.get("Composition") or None,
                 "palette": planet_palette(planet_class),
-                "estimatedValue": estimate_body_value(
-                    planet_class, e.get("MassEM"), terraformable,
-                    first_disc, mapped_by_me, first_mapped,
-                ),
             })
-        else:
-            body["estimatedValue"] = 0
         return body
 
 
@@ -606,21 +557,6 @@ def _rings(rings):
         })
     return out
 
-
-_STAR_VALUE_K = {
-    "D": 14057, "DA": 14057, "DB": 14057, "DC": 14057, "DAB": 14057,
-    "N": 22628, "H": 22628, "SupermassiveBlackHole": 22628,
-}
-
-
-def _star_value(e: dict) -> int:
-    st = e.get("StarType", "")
-    k = _STAR_VALUE_K.get(st, _STAR_VALUE_K.get(st[:1] if st else "", 1200))
-    mass = e.get("StellarMass") or 1.0
-    value = k + (mass * k / 66.25)
-    if not e.get("WasDiscovered", True):
-        value *= 2.6
-    return int(round(value))
 
 
 # --------------------------------------------------------------------------- #
@@ -698,4 +634,3 @@ if __name__ == "__main__":
     print(f"Bodies  first-mapped    : {t['bodiesFirstMapped']}")
     print(f"Earthlikes / Water / Ammonia: "
           f"{t['earthlikes']} / {t['waterWorlds']} / {t['ammoniaWorlds']}")
-    print(f"Estimated total value   : {t['estimatedValue']:,} cr")

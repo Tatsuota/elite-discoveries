@@ -67,8 +67,8 @@ is neither required nor sufficient for Codex data. Codex = journals, full stop.
 1. Run **`scripts\build_exe.bat`** once. It builds **`Elite Discoveries.exe`**
    — a single self-contained executable (the `web/` UI is bundled in; Python is
    only needed for this build step, not to run the result).
-2. Run **`Create Desktop Shortcut.bat`** to drop an **Elite Discoveries** icon on
-   your Desktop (pin it to the taskbar if you like).
+2. Run **`Create Shortcut.bat`** to put an **Elite Discoveries** icon on your
+   Desktop and in the Start Menu (pin it to the taskbar if you like).
 3. Double-click it. It starts the local server and opens the app in its **own
    window**; closing the window stops everything. Your selected commander and any
    keys are saved in `%LOCALAPPDATA%\EliteDiscoveries\config.json`, so they persist
@@ -83,9 +83,9 @@ straight to the Chromium/browser path.
 ### Without building (uses your installed Python)
 
 - **Own window:** double-click **`Elite Discoveries (Desktop).bat`** (runs
-  [`src/desktop.py`](src/desktop.py)). `Install Elite Discoveries.bat` makes
-  shortcuts. `scripts\run.bat` also does this and bootstraps a local `.venv`
-  with dependencies (including `pywebview`) on first run.
+  [`src/desktop.py`](src/desktop.py)). `scripts\run.bat` does the same but also
+  bootstraps a local `.venv` with dependencies (including `pywebview`) on first
+  run. `Create Shortcut.bat` makes the Desktop/Start-Menu shortcuts.
 - **Browser tab:** double-click **`Start Elite Discoveries.bat`**, or
   `python src\server.py`, then open `http://127.0.0.1:8765/`.
 - **Screenshot/stream-safe mode:** append `?redact=1` to the URL to mask the
@@ -173,7 +173,6 @@ restriction, not a limitation of this tool.
 | `src/codex_parser.py`   | **Codex source** — parses `CodexEntry` events → codex model. |
 | `src/api_clients.py`    | Optional Inara + EDSM CMDR-profile hooks.           |
 | `src/frontier_oauth.py` | Frontier Companion API OAuth2 (PKCE) login (optional, needs client_id). |
-| `src/edsm_data.py`      | EDSM get-logs/bodies source (kept for reference; not wired in). |
 | `src/server.py`         | Stdlib HTTP server + JSON API (data, config, cmdr, oauth). |
 | `src/desktop.py`        | **Standalone desktop client** — native OS window (pywebview) with Chromium/browser fallback; runs the server + own app window. |
 | `src/make_icon.py`      | Generates `assets/elite-discoveries.ico` (stdlib, no Pillow). |
@@ -181,12 +180,10 @@ restriction, not a limitation of this tool.
 | `scripts/build_exe.bat` | Builds `Elite Discoveries.exe` (top level, PyInstaller, one-file, windowed). |
 | `scripts/run.bat`       | Dev/no-build launcher — bootstraps a local `.venv` then runs `src/desktop.py`. |
 | `scripts/requirements.txt` | `pywebview` (native window, optional) + build-time PyInstaller. The app itself otherwise needs only the stdlib. |
-| `scripts/install.ps1`   | Creates the Desktop/Start-Menu shortcuts (invoked by `Install Elite Discoveries.bat`). |
+| `scripts/make_public.py` | Builds the publishable tree — strips the in-development login feature and local state, then leak-checks the result. |
 | `assets/elite-discoveries.ico` | App icon used by shortcuts and the built `.exe`.  |
-| `Create Desktop Shortcut.bat` | Desktop shortcut → the built `.exe`.       |
-| `Create Shortcut.bat` | Desktop shortcut → the built `.exe` if present, else `scripts\run.bat`. |
+| `Create Shortcut.bat` | Desktop + Start-Menu shortcuts → the built `.exe` if present, else `scripts\run.bat`. |
 | `Elite Discoveries (Desktop).bat` | Launch via installed Python (no build).|
-| `Install Elite Discoveries.bat` | Runs `scripts\install.ps1` to make shortcuts. |
 | `Start Elite Discoveries.bat` | Browser-mode launcher.                     |
 | `config.json`        | Local state (selected commander, optional keys); source runs read/write `src/config.json` (next to `server.py`), the `.exe` uses `%LOCALAPPDATA%\EliteDiscoveries\`. |
 
