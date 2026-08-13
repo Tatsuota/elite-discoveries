@@ -168,6 +168,29 @@ def _short_name(body_name: str, system_name: str) -> str:
     return body_name
 
 
+# --------------------------------------------------------------------------- #
+#  Per-file parse cache
+#
+#  Rolled-over journals never change, so their parsed contribution is kept and
+#  reused; only the file the game is currently writing is re-read on a refresh.
+#  Keyed on (path, size+mtime, commander, inbound active commander) so a file
+#  that is edited, or read for a different commander, is parsed afresh.
+# --------------------------------------------------------------------------- #
+_FILE_CACHE: dict[tuple, "Parser"] = {}
+_FILE_CACHE_MAX = 1200          # ~4x a heavy player's journal count
+
+
+def _trim_file_cache() -> None:
+    """Drop the oldest entries if the cache grows unreasonably (dict is ordered)."""
+    while len(_FILE_CACHE) > _FILE_CACHE_MAX:
+        _FILE_CACHE.pop(next(iter(_FILE_CACHE)))
+
+
+def clear_file_cache() -> None:
+    """Forget every cached file (used by tests and a hard reload)."""
+    _FILE_CACHE.clear()
+
+
 def _classify(event: dict) -> str:
     if "StarType" in event:
         return "star"
@@ -223,30 +246,111 @@ class Parser:
         return sys
 
     # -- main parse loop ---------------------------------------------------- #
+    def read_file(self, path: str) -> None:
+        """Fold one journal file into this parser's state."""
+        try:
+            with open(path, "r", encoding="utf-8", errors="replace") as fh:
+                for line in fh:
+                    if '"event":"' not in line:
+                        continue
+                    # cheap prefilter before json.loads
+                    if not any(k in line for k in (
+                        "Scan", "FSDJump", "Location", "CarrierJump",
+                        "SAASignalsFound", "FSSBodySignals", "Commander",
+                        "LoadGame", "Disembark", "CodexEntry",
+                    )):
+                        continue
+                    try:
+                        e = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    self._handle(e)
+        except OSError:
+            pass
+
     def parse(self) -> dict:
+        """Parse every journal, reusing cached results for unchanged files.
+
+        Journals are append-only and roll over, so every file except the current
+        one is immutable. Each file's contribution is cached against its
+        (size, mtime) and merged back, which means a REFRESH only re-reads the
+        journal the game is actively writing.
+        """
         files = journal_files(self.journal_dir)
         self.journal_count = len(files)
         for path in files:
             try:
-                with open(path, "r", encoding="utf-8", errors="replace") as fh:
-                    for line in fh:
-                        if '"event":"' not in line:
-                            continue
-                        # cheap prefilter before json.loads
-                        if not any(k in line for k in (
-                            "Scan", "FSDJump", "Location", "CarrierJump",
-                            "SAASignalsFound", "FSSBodySignals", "Commander",
-                            "LoadGame", "Disembark", "CodexEntry",
-                        )):
-                            continue
-                        try:
-                            e = json.loads(line)
-                        except json.JSONDecodeError:
-                            continue
-                        self._handle(e)
+                st = os.stat(path)
+                stamp = (st.st_size, st.st_mtime_ns)
             except OSError:
                 continue
+            # The active commander can carry into a file that has no LoadGame of
+            # its own, so it forms part of the identity of a cached result.
+            key = (path, stamp, self.commander_filter, self._active)
+            hit = _FILE_CACHE.get(key)
+            if hit is None:
+                part = Parser(self.journal_dir, self.commander_input)
+                part._active = self._active
+                part.read_file(path)
+                _FILE_CACHE[key] = hit = part
+                _trim_file_cache()
+            self._absorb(hit)
         return self.build()
+
+    def _absorb(self, part: "Parser") -> None:
+        """Merge one file's parsed contribution into this parser."""
+        self._active = part._active
+        self.commanders |= part.commanders
+        if not self.commander_filter and part.commander:
+            self.commander = part.commander
+
+        for addr, s in part.systems.items():
+            mine = self.systems.get(addr)
+            if mine is None:
+                self.systems[addr] = s = dict(s)
+                s["bodies"] = dict(s["bodies"])
+                continue
+            for k in ("name", "pos", "bodyCount", "allegiance",
+                      "economy", "security", "population"):
+                if s.get(k) not in (None, ""):
+                    mine[k] = s[k]
+
+        for key, e in part._bodies.items():          # keep the earliest scan
+            cur = self._bodies.get(key)
+            if cur is None or e.get("timestamp", "") < cur.get("timestamp", ""):
+                self._bodies[key] = e
+
+        self._saa.update(part._saa)
+        self._disembarked |= part._disembarked
+
+        for key, seen in part._footfall_seen.items():
+            cur = self._footfall_seen.get(key)
+            if cur is None or seen[0] < cur[0]:
+                self._footfall_seen[key] = seen
+
+        # NB: cached partials are reused on every refresh, so anything merged out
+        # of one must be copied before it is mutated here — otherwise the next
+        # run starts from a polluted cache.
+        for key, sig in part._signals.items():
+            cur = self._signals.get(key)
+            if cur is None:
+                fresh = dict(sig)
+                fresh["other"] = list(sig.get("other", []))
+                if "genuses" in sig:
+                    fresh["genuses"] = list(sig["genuses"])
+                self._signals[key] = fresh
+                continue
+            cur["bio"] = max(cur.get("bio", 0), sig.get("bio", 0))
+            cur["geo"] = max(cur.get("geo", 0), sig.get("geo", 0))
+            cur.setdefault("other", []).extend(sig.get("other", []))
+            if sig.get("genuses"):
+                have = cur.setdefault("genuses", [])
+                for g in sig["genuses"]:
+                    if g not in have:
+                        have.append(g)
+
+        for rec in part.codex_entries.values():
+            merge_codex_record(self.codex_entries, dict(rec))   # copy: see above
 
     def _handle(self, e: dict):
         ev = e.get("event")
