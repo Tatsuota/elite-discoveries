@@ -10,79 +10,32 @@ one) and group them by category / sub-category / region, just like discoveries.
     Region(_Localised), System, SystemAddress, BodyID, Latitude, Longitude,
     IsNewEntry (true = first time this commander logged it).
 
-Standard library only. Reuses `journal_parser` only for the file-listing helpers.
+The journal walk itself lives in `journal_parser`: entries are collected on the
+same pass as the discoveries (see `Parser.codex_entries`) so the files are read
+once per refresh. This module turns those entries into the grouped model.
+
+Standard library only.
 """
 
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
 
-from journal_parser import journal_files, default_journal_dir
+import journal_parser
 
 
 def load_codex(journal_dir: str | None = None, commander: str | None = None) -> dict:
-    cf = (commander or "").strip().lower() or None
-    active = None
-    entries: dict[int, dict] = {}   # EntryID -> earliest record
+    """Standalone entry point (CLI / one-off use) — parses the journals itself.
 
-    for path in journal_files(journal_dir or default_journal_dir()):
-        try:
-            with open(path, "r", encoding="utf-8", errors="replace") as fh:
-                for line in fh:
-                    if '"event":"' not in line:
-                        continue
-                    if not any(k in line for k in ("CodexEntry", "Commander", "LoadGame")):
-                        continue
-                    try:
-                        e = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
-                    ev = e.get("event")
-                    if ev in ("Commander", "LoadGame"):
-                        n = e.get("Name") or e.get("Commander")
-                        if n:
-                            active = n
-                        continue
-                    if ev != "CodexEntry":
-                        continue
-                    # only the selected commander's codex
-                    if cf and (active or "").strip().lower() != cf:
-                        continue
-                    eid = e.get("EntryID")
-                    if eid is None:
-                        continue
-
-                    rec = {
-                        "entryId": eid,
-                        "name": e.get("Name_Localised") or _tidy(e.get("Name")),
-                        "subCategory": e.get("SubCategory_Localised") or _tidy(e.get("SubCategory")),
-                        "category": e.get("Category_Localised") or _tidy(e.get("Category")),
-                        "region": e.get("Region_Localised") or _tidy(e.get("Region")),
-                        "system": e.get("System"),
-                        "systemAddress": e.get("SystemAddress"),
-                        "bodyId": e.get("BodyID"),
-                        "lat": e.get("Latitude"),
-                        "lon": e.get("Longitude"),
-                        "isNew": bool(e.get("IsNewEntry")),
-                        "timestamp": e.get("timestamp"),
-                    }
-                    prev = entries.get(eid)
-                    if prev is None:
-                        entries[eid] = rec
-                    else:
-                        # keep the earliest sighting, but remember if it was ever new
-                        ever_new = prev["isNew"] or rec["isNew"]
-                        if (rec["timestamp"] or "") < (prev["timestamp"] or ""):
-                            entries[eid] = rec
-                        entries[eid]["isNew"] = ever_new
-        except OSError:
-            continue
-
-    return _build(entries, commander)
+    The server does NOT use this: it reads `Parser.codex_entries` from the
+    discovery parse and calls `build_from_entries`, avoiding a second full read.
+    """
+    parser = journal_parser.Parser(journal_dir, commander)
+    parser.parse()
+    return build_from_entries(parser.codex_entries, commander)
 
 
-def _build(entries: dict[int, dict], commander: str | None) -> dict:
+def build_from_entries(entries: dict[int, dict], commander: str | None) -> dict:
     cats: dict[str, dict] = {}
     regions: dict[str, int] = {}
     new_total = 0
@@ -125,17 +78,6 @@ def _build(entries: dict[int, dict], commander: str | None) -> dict:
         "categories": categories,
         "regions": region_list,
     }
-
-
-def _tidy(token: str | None) -> str | None:
-    """Turn a raw `$Codex_..._Name;` token into something readable as a fallback."""
-    if not token:
-        return token
-    s = token.strip().strip("$;")
-    for p in ("Codex_Ent_", "Codex_SubCategory_", "Codex_Category_", "Codex_RegionName_"):
-        if s.startswith(p):
-            s = s[len(p):]
-    return s.replace("_", " ").strip() or token
 
 
 if __name__ == "__main__":

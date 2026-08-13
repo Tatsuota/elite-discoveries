@@ -97,16 +97,22 @@ _CONTENT_TYPES = {
 
 
 def load_data(commander: str, force: bool = False) -> dict:
-    """Read the local journals for ONE commander (the attached one)."""
+    """Read the local journals for ONE commander (the attached one).
+
+    One pass over the journals produces BOTH the discovery model and the Codex:
+    the parser collects `CodexEntry` events alongside the scans, so a refresh
+    reads each file once instead of once per model.
+    """
     key = (commander or "").strip().lower()
     with _LOCK:
         if force or key not in _CACHE:
             print(f"Scanning journals for CMDR {commander}...")
-            data = journal_parser.load(commander=commander)
+            parser = journal_parser.Parser(commander=commander)
+            data = parser.parse()
+            _CODEX_CACHE[key] = codex_parser.build_from_entries(
+                parser.codex_entries, commander)
+
             # Upgrade systems holding Codex "Anomalies" entries to the pink group.
-            # (Parse the codex here directly — _LOCK is not re-entrant.)
-            if force or key not in _CODEX_CACHE:
-                _CODEX_CACHE[key] = codex_parser.load_codex(commander=commander)
             anomaly_addrs = {
                 e.get("systemAddress")
                 for cat in _CODEX_CACHE[key].get("categories", [])
@@ -119,7 +125,8 @@ def load_data(commander: str, force: bool = False) -> dict:
             _CACHE[key] = data
             t = data["totals"]
             print(f"  -> {t['systemsFirstDiscovered']} systems, "
-                  f"{t['bodiesFirstDiscovered']} bodies first-discovered.")
+                  f"{t['bodiesFirstDiscovered']} bodies first-discovered, "
+                  f"{_CODEX_CACHE[key]['totalEntries']} codex entries.")
         return _CACHE[key]
 
 
@@ -133,14 +140,18 @@ def location_index(force: bool = False) -> dict:
 
 
 def load_codex_data(commander: str, force: bool = False) -> dict:
-    """Read the local journals' Codex entries for ONE commander."""
+    """Codex model for ONE commander.
+
+    Filled by `load_data()` from the same journal pass, so this normally just
+    returns the cache. It only triggers a read when the Codex tab is opened
+    before any discovery load (or after a forced refresh).
+    """
     key = (commander or "").strip().lower()
-    with _LOCK:
-        if force or key not in _CODEX_CACHE:
-            print(f"Scanning Codex for CMDR {commander}...")
-            _CODEX_CACHE[key] = codex_parser.load_codex(commander=commander)
-            print(f"  -> {_CODEX_CACHE[key]['totalEntries']} codex entries.")
-        return _CODEX_CACHE[key]
+    if force or key not in _CODEX_CACHE:
+        load_data(commander, force=force)   # one pass populates both caches
+    return _CODEX_CACHE.get(key, {"ok": True, "commander": commander,
+                                  "totalEntries": 0, "newEntries": 0,
+                                  "categories": [], "regions": []})
 
 
 # --------------------------------------------------------------------------- #

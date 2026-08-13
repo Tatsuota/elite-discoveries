@@ -108,6 +108,57 @@ def star_color(star_type: str) -> str:
 
 
 # --------------------------------------------------------------------------- #
+#  Codex records
+#
+#  Collected during the same journal walk as the discoveries, so the files are
+#  read once per refresh instead of once here and again in codex_parser.
+#  `codex_parser` aggregates these into its category/region model.
+# --------------------------------------------------------------------------- #
+def tidy_codex_token(token: str | None) -> str | None:
+    """Turn a raw `$Codex_..._Name;` token into something readable as a fallback."""
+    if not token:
+        return token
+    s = token.strip().strip("$;")
+    for p in ("Codex_Ent_", "Codex_SubCategory_", "Codex_Category_", "Codex_RegionName_"):
+        if s.startswith(p):
+            s = s[len(p):]
+    return s.replace("_", " ").strip() or token
+
+
+def codex_record(e: dict) -> dict:
+    """Normalise one `CodexEntry` event into the shape the Codex view wants."""
+    return {
+        "entryId": e.get("EntryID"),
+        "name": e.get("Name_Localised") or tidy_codex_token(e.get("Name")),
+        "subCategory": e.get("SubCategory_Localised") or tidy_codex_token(e.get("SubCategory")),
+        "category": e.get("Category_Localised") or tidy_codex_token(e.get("Category")),
+        "region": e.get("Region_Localised") or tidy_codex_token(e.get("Region")),
+        "system": e.get("System"),
+        "systemAddress": e.get("SystemAddress"),
+        "bodyId": e.get("BodyID"),
+        "lat": e.get("Latitude"),
+        "lon": e.get("Longitude"),
+        "isNew": bool(e.get("IsNewEntry")),
+        "timestamp": e.get("timestamp"),
+    }
+
+
+def merge_codex_record(entries: dict, rec: dict) -> None:
+    """Keep the earliest sighting of an entry, but remember if it was ever new."""
+    eid = rec.get("entryId")
+    if eid is None:
+        return
+    prev = entries.get(eid)
+    if prev is None:
+        entries[eid] = rec
+        return
+    ever_new = prev["isNew"] or rec["isNew"]
+    if (rec["timestamp"] or "") < (prev["timestamp"] or ""):
+        entries[eid] = rec
+    entries[eid]["isNew"] = ever_new
+
+
+# --------------------------------------------------------------------------- #
 #  The model
 # --------------------------------------------------------------------------- #
 def _short_name(body_name: str, system_name: str) -> str:
@@ -146,6 +197,8 @@ class Parser:
         self._signals: dict[tuple, dict] = {}     # bio/geo/material signals
         self._disembarked: set[tuple] = set()     # bodies we actually walked on
         self._footfall_seen: dict[tuple, tuple] = {}   # key -> (ts, wasFootfalled)
+        # Codex entries gathered on the same pass; codex_parser aggregates them.
+        self.codex_entries: dict[int, dict] = {}
         self.journal_count = 0
 
     def _active_ok(self) -> bool:
@@ -183,7 +236,7 @@ class Parser:
                         if not any(k in line for k in (
                             "Scan", "FSDJump", "Location", "CarrierJump",
                             "SAASignalsFound", "FSSBodySignals", "Commander",
-                            "LoadGame", "Disembark",
+                            "LoadGame", "Disembark", "CodexEntry",
                         )):
                             continue
                         try:
@@ -235,6 +288,10 @@ class Parser:
                 return
             sys = self._system(addr, e.get("SystemName"))
             sys["bodyCount"] = e.get("BodyCount")
+            return
+
+        if ev == "CodexEntry":
+            merge_codex_record(self.codex_entries, codex_record(e))
             return
 
         if ev == "Disembark":
