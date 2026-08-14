@@ -180,6 +180,9 @@ h1, h2, h3 { font-weight: 600; letter-spacing: 0.08em; margin: 0; }
   background: linear-gradient(90deg, rgba(255,90,208,0.12), transparent 70%); }
 .gh-other   { color: var(--text-dim); border-left-color: var(--line);
   background: linear-gradient(90deg, rgba(165,47,255,0.06), transparent 70%); }
+/* distance bands replace the category headers while sorting nearest-first */
+.gh-dist    { color: var(--cyan); border-left-color: var(--cyan);
+  background: linear-gradient(90deg, rgba(175,132,207,0.14), transparent 70%); }
 
 /* category accent on each row (matches its group header) */
 .system.cat-water   { box-shadow: inset 2px 0 0 var(--cat-blue); }

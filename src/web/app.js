@@ -273,8 +273,10 @@ function applyView() {
     for (const s of DATA.systems) delete s._dist;
   }
 
-  // Systems are always separated into Codex categories; the sort applies inside
-  // each category group.
+  // Normally systems are separated into Codex categories and the sort applies
+  // inside each group. Sorting by distance is the exception: grouping by
+  // category there would bury the genuinely closest system under whichever
+  // category it belongs to, so distance takes over the grouping entirely.
   const cmp = (a, b) => {
     switch (sort) {
       case "bodies": return b.scannedCount - a.scannedCount;
@@ -287,9 +289,24 @@ function applyView() {
       default: return (b.discoveredAt || "").localeCompare(a.discoveredAt || "");
     }
   };
-  VIEW.sort((a, b) => catRank(a) - catRank(b) || cmp(a, b));
+  VIEW.sort(nearestMode() ? cmp : (a, b) => catRank(a) - catRank(b) || cmp(a, b));
 
   renderList();
+}
+
+// True when the list should be ordered purely by distance from the FROM system.
+function nearestMode() {
+  return !!(REF && REF.pos && $("#sort").value === "nearest");
+}
+
+function distanceBand(d) {
+  if (d == null) return "UNKNOWN POSITION";
+  if (d < 50) return "WITHIN 50 LY";
+  if (d < 200) return "50 – 200 LY";
+  if (d < 500) return "200 – 500 LY";
+  if (d < 1000) return "500 – 1,000 LY";
+  if (d < 5000) return "1,000 – 5,000 LY";
+  return "BEYOND 5,000 LY";
 }
 
 function renderList() {
@@ -310,11 +327,13 @@ function renderList() {
   }
   const frag = document.createDocumentFragment();
   let lastGroup = null;
+  const byDistance = nearestMode();
   for (const s of VIEW) {
-    const g = groupLabel(s);
+    const g = groupLabel(s, byDistance);
     if (g !== lastGroup) {
-      const count = VIEW.filter((v) => groupLabel(v) === g).length;
-      frag.appendChild(el("div", `group-head gh-${s.category || "other"}`,
+      const count = VIEW.filter((v) => groupLabel(v, byDistance) === g).length;
+      const cls = byDistance ? "gh-dist" : `gh-${s.category || "other"}`;
+      frag.appendChild(el("div", `group-head ${cls}`,
         `${escapeHtml(g)} <span class="gh-count">${count}</span>`));
       lastGroup = g;
     }
@@ -337,7 +356,8 @@ const CATS = {
 function catRank(sys) {
   return (CATS[sys.category] || CATS.other).rank;
 }
-function groupLabel(sys) {
+function groupLabel(sys, byDistance) {
+  if (byDistance) return distanceBand(sys._dist);
   return (CATS[sys.category] || CATS.other).label;
 }
 
