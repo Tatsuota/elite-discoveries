@@ -1,29 +1,36 @@
 /* ===========================================================================
-   Elite Discoveries — "Tats Stealth Purple" (EDHM-UI) HUD theme.
-   Vivid violet + soft lavender on stealth-black, gold & red accents.
-   Palette decoded from the EDHM theme: #A52FFF, #AF84CF, #FFD800, #E61B1B.
+   Elite Discoveries — neutral dark-mode base (steel-on-near-black).
+   This is the app's built-in look with the HUD switch OFF: no game colour
+   opinion of its own, just quiet steel accents so the UI reads as "off".
+   When the HUD switch is turned ON, paintTheme() in app.js overrides the
+   accent, amber, cyan, green and text variables below at
+   runtime to match the commander's actual in-game HUD theme — for Tyler
+   that's his own EDHM theme, "Tats Stealth Purple" (#A52FFF / #AF84CF).
+   Flipping the switch should visibly repaint the app; this file no longer
+   ships that purple as the default so the toggle isn't a no-op.
    =========================================================================== */
 :root {
-  --bg:        #262624;   /* Claude dark grey */
-  --bg-2:      #30302e;   /* Claude raised surface */
-  --bg-3:      #1f1e1d;   /* recessed wells (inputs, drawers) */
+  --bg:        #0e0e11;   /* near-black base */
+  --bg-2:      #16161a;   /* raised surface */
+  --bg-3:      #0a0a0c;   /* recessed wells (inputs, drawers) */
   --panel:     rgba(var(--accent-rgb), 0.05);
   --panel-2:   rgba(var(--accent-rgb), 0.10);
   --line:      rgba(var(--accent2-rgb), 0.32);
   --line-soft: rgba(var(--accent2-rgb), 0.16);
-  /* Accent as RGB components so rgba() can reuse it; the server overrides
-     --accent-rgb / --accent2-rgb to match the commander's in-game HUD. */
-  --accent-rgb:  165, 47, 255;
-  --accent2-rgb: 175, 132, 207;
-  --on-accent: #17111d;   /* text on a filled accent button */
-  --amber:     #a52fff;   /* primary vivid violet */
-  --amber-lt:  #c9a6f2;   /* light violet (headings/numbers) */
-  --amber-txt: #d8c4ef;   /* lavender body text */
-  --cyan:      #af84cf;   /* soft lavender (secondary accent) */
-  --cyan-dim:  #6f5293;
-  --green:     var(--amber-lt);   /* habitable highlight (on-theme lavender) */
-  --text:      #e6e1ee;
-  --text-dim:  #9a8fb3;
+  /* Accent as RGB components so rgba() can reuse it; paintTheme() in app.js
+     overrides --accent-rgb / --accent2-rgb (and friends below) to match the
+     commander's in-game HUD when the HUD switch is ON. */
+  --accent-rgb:  138, 148, 166;   /* steel #8a94a6 */
+  --accent2-rgb: 111, 120, 137;   /* #6f7889 */
+  --on-accent: #0e0e11;   /* dark text on a filled accent button */
+  --amber:     #8a94a6;   /* primary steel */
+  --amber-lt:  #c3cad6;   /* light steel (headings/numbers) */
+  --amber-txt: #aab2c0;   /* body text */
+  --cyan:      #7f8a9e;   /* secondary accent */
+  --cyan-dim:  #4a5262;
+  --green:     var(--amber-lt);   /* habitable highlight (on-theme steel) */
+  --text:      #e2e6ec;
+  --text-dim:  #8b93a1;
   --danger:    #e61b1b;
   --gold:      #ffd800;
   --radius:    2px;

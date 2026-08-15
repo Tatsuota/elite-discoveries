@@ -27,6 +27,7 @@ os.environ.setdefault("ED_NO_BROWSER", "1")
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import browser_launch  # noqa: E402  (after sys.path tweak)
 import server  # noqa: E402  (after sys.path tweak)
 
 WINDOW_SIZE = "1180,840"
@@ -158,8 +159,7 @@ def main() -> None:
 
     # 3) Default browser.
     if not browser:
-        import webbrowser
-        webbrowser.open(url)
+        browser_launch.open_url(url)
         print(f"Elite Discoveries running at {url}\nClose this window to stop.")
         try:
             while True:
