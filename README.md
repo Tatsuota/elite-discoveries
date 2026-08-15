@@ -97,16 +97,9 @@ Press **REFRESH** after a flight to re-scan your journals for new discoveries.
 
 Set environment variables before launching:
 
-| Variable            | Purpose                                                        | Default |
-|---------------------|------------------------------------------------------------------|---------|
-| `ED_PORT`           | Port for the local web server                                    | `8765`  |
-| `ED_CHROME_PROFILE` | Chrome profile directory to open the UI in (e.g. `Default`, `Profile 1`) | none — uses the OS default browser |
-| `ED_CHROME_PATH`    | Path to `chrome.exe`, if it's not in a standard install location | auto-detected |
-
-`ED_CHROME_PROFILE` can also be set persistently via a `"chrome_profile"` key
-in `config.json` (checked first, before the environment variable). If no
-profile is configured, chrome.exe can't be found, or the platform isn't
-Windows, the app falls back to the OS default browser.
+| Variable   | Purpose                            | Default |
+|------------|------------------------------------|---------|
+| `ED_PORT`  | Port for the local web server      | `8765`  |
 
 ## How "first discovery" is determined
 

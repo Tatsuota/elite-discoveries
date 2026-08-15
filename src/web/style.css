@@ -39,6 +39,13 @@
   --cat-green: #57d98a;   /* ammonia worlds / ammonia-based life */
   --cat-cyan:  #4ce0e0;   /* water + ammonia */
   --cat-pink:  #ff5ad0;   /* anomalies */
+  /* Tag colours - deliberately fixed. paintTheme in app.js must never override
+     these: a tag's colour encodes what the tag MEANS, so it has to read the
+     same whether the HUD switch is on or off. */
+  --tag-first: #b79cff;   /* FIRST DISCOVERED / FIRST DISCOVERIES - violet */
+  --tag-elw:   #ffb454;   /* EARTH-LIKE - amber */
+  --tag-terra: #ff9db0;   /* TERRAFORMABLE - rose */
+  --tag-bio:   #a3e635;   /* BIO - lime */
 }
 
 * { box-sizing: border-box; }
@@ -204,10 +211,13 @@ h1, h2, h3 { font-weight: 600; letter-spacing: 0.08em; margin: 0; }
 .system.cat-elw     { box-shadow: inset 2px 0 0 var(--amber); }
 
 /* tag colours follow the category palette */
-.tag.t-elw     { color: var(--amber-lt); border-color: var(--amber); }
-.tag.t-water   { color: var(--cat-blue); border-color: var(--cat-blue); background: rgba(78,167,255,0.1); }
-.tag.t-ammonia { color: var(--cat-green); border-color: var(--cat-green); background: rgba(87,217,138,0.1); }
-.tag.t-anomaly { color: var(--cat-pink); border-color: var(--cat-pink); background: rgba(255,90,208,0.1); }
+.tag.t-first   { color: var(--tag-first);  border-color: var(--tag-first);  background: rgba(183,156,255,0.12); }
+.tag.t-elw     { color: var(--tag-elw);    border-color: var(--tag-elw);    background: rgba(255,180,84,0.12); }
+.tag.t-water   { color: var(--cat-blue);   border-color: var(--cat-blue);   background: rgba(78,167,255,0.12); }
+.tag.t-ammonia { color: var(--cat-green);  border-color: var(--cat-green);  background: rgba(87,217,138,0.12); }
+.tag.t-anomaly { color: var(--cat-pink);   border-color: var(--cat-pink);   background: rgba(255,90,208,0.12); }
+.tag.t-terra   { color: var(--tag-terra);  border-color: var(--tag-terra);  background: rgba(255,157,176,0.12); }
+.tag.t-bio     { color: var(--tag-bio);    border-color: var(--tag-bio);    background: rgba(163,230,53,0.12); }
 
 /* ---- system list (two columns to fill the screen) ------------------------ */
 /* Single full-width bars; feature labels live on the bar itself. */
@@ -245,7 +255,7 @@ h1, h2, h3 { font-weight: 600; letter-spacing: 0.08em; margin: 0; }
 .system.open .chevron { transform: rotate(90deg); }
 
 .tag { font-size: 10px; letter-spacing: 0.12em; padding: 2px 8px; border-radius: 2px;
-  background: rgba(var(--accent-rgb),0.14); border: 1px solid var(--line); color: var(--amber-lt); }
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.14); color: #c8ccd4; }
 .tag.cyan { background: rgba(var(--accent2-rgb),0.12); border-color: var(--cyan-dim); color: var(--cyan); }
 
 /* ---- body drawer (contained: column width, capped height, scrolls) ------- */
@@ -279,12 +289,12 @@ h1, h2, h3 { font-weight: 600; letter-spacing: 0.08em; margin: 0; }
 .badges { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
 .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; letter-spacing: 0.08em;
   padding: 3px 7px; border-radius: 2px; border: 1px solid var(--line-soft); color: var(--text-dim); text-transform: uppercase; }
-.badge.fd  { color: var(--amber-lt); border-color: var(--amber); background: rgba(var(--accent-rgb),0.12); }
-.badge.fm  { color: var(--cyan); border-color: var(--cyan-dim); background: rgba(var(--accent2-rgb),0.1); }
+.badge.fd  { color: var(--tag-first); border-color: var(--tag-first); background: rgba(183,156,255,0.12); }
+.badge.fm  { color: #9ab0c0; border-color: #9ab0c0; background: rgba(154,176,192,0.10); }
 .badge.ff  { color: var(--gold); border-color: var(--gold); background: rgba(255,216,0,0.1); }
-.badge.tf  { color: var(--green); border-color: var(--green); background: rgba(var(--accent2-rgb),0.1); }
-.badge.land{ color: var(--amber-txt); }
-.badge.bio { color: var(--green); }
+.badge.tf  { color: var(--tag-terra); border-color: var(--tag-terra); background: rgba(255,157,176,0.12); }
+.badge.land { color: #b8c0cc; }
+.badge.bio { color: var(--tag-bio); }
 
 .body-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 4px 14px; }
 .bstat { display: flex; justify-content: space-between; gap: 8px; font-size: 11.5px;

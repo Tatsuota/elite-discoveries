@@ -511,14 +511,14 @@ function systemSummary(sys) {
 // Text-only labels for what a system holds (shown on the collapsed bar).
 function tagsFor(sys) {
   const t = [];
-  if (sys.systemFirstDiscovered) t.push(`<span class="tag">FIRST DISCOVERED</span>`);
-  else if (sys.firstDiscoveredCount) t.push(`<span class="tag">FIRST DISCOVERIES</span>`);
+  if (sys.systemFirstDiscovered) t.push(`<span class="tag t-first">FIRST DISCOVERED</span>`);
+  else if (sys.firstDiscoveredCount) t.push(`<span class="tag t-first">FIRST DISCOVERIES</span>`);
   if (sys.flags.earthlike) t.push(`<span class="tag t-elw">EARTH-LIKE</span>`);
   if (sys.flags.waterWorld) t.push(`<span class="tag t-water">WATER WORLD</span>`);
   if (sys.flags.ammonia) t.push(`<span class="tag t-ammonia">AMMONIA</span>`);
   if (sys.category === "anomaly") t.push(`<span class="tag t-anomaly">ANOMALY</span>`);
-  if (sys.flags.terraformable) t.push(`<span class="tag">TERRAFORMABLE</span>`);
-  if (sys.flags.bio) t.push(`<span class="tag t-ammonia">BIO</span>`);
+  if (sys.flags.terraformable) t.push(`<span class="tag t-terra">TERRAFORMABLE</span>`);
+  if (sys.flags.bio) t.push(`<span class="tag t-bio">BIO</span>`);
   return t.join("");
 }
 
