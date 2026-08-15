@@ -196,3 +196,29 @@ background (`#262624` / `#30302E`). Panel styling follows the Elite Dangerous UI
 language: chamfered corners, solid-fill active tabs and button hovers with dark
 text, and section headers with rule lines. The colors live in CSS variables at
 the top of [`src/web/style.css`](src/web/style.css) if you want to tweak them.
+
+### Matching your in-game HUD
+
+That palette is only the starting point — the app reads the colours you
+actually fly with and repaints itself to match, so it sits alongside the game
+instead of clashing with it. Two sources, in order:
+
+1. **EDHM-UI** — the theme currently applied to the game
+   (`%USERPROFILE%\EDHM_UI\ODYSS\EDHM\EDHM-Ini\ThemeSettings.json`). Colours are
+   stored there as ARGB integers against ~150 named HUD elements; the accent is
+   taken from the hue family the theme leans on hardest, which keeps Elite's
+   fixed status colours (the orange target, the red warning) from being mistaken
+   for your theme.
+2. **The game's own `GUIColour` matrix**
+   (`GraphicsConfigurationOverride.xml`) — the classic HUD re-tint, a 3×3 matrix
+   multiplied against Elite's default orange. An identity matrix means you
+   haven't re-tinted, so it's ignored.
+
+If neither source says anything, the built-in palette stands. The **HUD** button
+in the top bar toggles the match on and off and remembers your choice; its
+diamond swatch always shows the game colour on offer.
+
+The Codex category colours — blue water, green ammonia, cyan water+ammonia, pink
+anomaly — are deliberately *not* re-tinted. They encode what a body is, so
+pushing them all toward one accent would erase the distinction they exist to
+draw.

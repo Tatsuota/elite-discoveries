@@ -52,8 +52,72 @@ function fmtPeriod(days) {
 // The journals are read ONLY after a commander API is attached, and only for
 // that commander (the journal folder can hold several ED characters).
 async function boot() {
+  await applyGameTheme();    // match the commander's real in-game HUD colours
   initApi();                 // optional Inara/EDSM/Frontier profile — non-blocking
   await loadDiscoveries();   // gate: choose which commander to read
+}
+
+// ---- match the game's HUD colours ------------------------------------------
+// The server reads the colours actually applied in Elite Dangerous (EDHM's
+// theme, or the game's own GUIColour matrix) and the UI follows them. If
+// neither source says anything, the stylesheet's built-in palette stands.
+// The HUD button in the topbar toggles it; the choice sticks.
+let THEME = null;
+const THEME_OFF_KEY = "ed.hudTheme.off";
+
+async function applyGameTheme() {
+  try {
+    const res = await fetch("/api/theme");
+    THEME = (await res.json()).palette || null;
+    if (!THEME) return;            // nothing detected — no toggle worth showing
+
+    // The swatch always shows the game colour on offer, so it must not follow the
+    // toggle the way the rest of the palette does.
+    document.documentElement.style.setProperty("--hud-swatch", THEME.primary);
+    paintTheme(localStorage.getItem(THEME_OFF_KEY) !== "1");
+
+    const btn = document.getElementById("hudBtn");
+    btn.hidden = false;
+    btn.addEventListener("click", () => {
+      const on = localStorage.getItem(THEME_OFF_KEY) === "1";
+      localStorage.setItem(THEME_OFF_KEY, on ? "0" : "1");
+      paintTheme(on);
+    });
+  } catch (e) {
+    // Theming must never block boot — offline, an older build without the
+    // route, a missing #hudBtn, or a malformed palette all fall back to the
+    // stylesheet's built-in colours instead of hanging the app on "booting".
+    console.error("game theme apply failed:", e);
+  }
+}
+
+// Push the game palette onto the stylesheet's variables, or clear them to fall
+// back to the built-in ones. Codex category colours are deliberately untouched:
+// blue/green/cyan/pink encode water vs ammonia vs anomaly, so re-tinting them
+// would erase the very distinction they exist to draw.
+function paintTheme(on) {
+  const root = document.documentElement.style;
+  const vars = {
+    "--accent-rgb":  THEME.primaryRgb.join(", "),
+    "--accent2-rgb": THEME.secondaryRgb.join(", "),
+    "--amber":       THEME.primary,
+    "--amber-lt":    THEME.primaryLight,
+    "--amber-txt":   THEME.primaryText,
+    "--cyan":        THEME.secondary,
+    "--cyan-dim":    THEME.secondaryDim,
+    "--green":       THEME.primaryLight,
+    "--text":        THEME.text,
+    "--text-dim":    THEME.textDim,
+  };
+  for (const [k, v] of Object.entries(vars)) {
+    if (on) root.setProperty(k, v); else root.removeProperty(k);
+  }
+  const btn = document.getElementById("hudBtn");
+  btn.classList.toggle("on", on);
+  const from = THEME.source === "edhm" ? "your EDHM theme"
+                                       : "your Elite Dangerous HUD colour";
+  btn.title = on ? `Matching ${from} — click for the app's own colours`
+                 : `Using the app's own colours — click to match ${from}`;
 }
 
 async function loadDiscoveries() {

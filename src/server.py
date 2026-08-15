@@ -27,6 +27,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 import codex_parser
+import game_theme
 import journal_parser
 
 # --------------------------------------------------------------------------- #
@@ -319,6 +320,16 @@ class Handler(BaseHTTPRequestHandler):
             return
         if route == "/api/commanders":
             self._send_json(journal_parser.list_commanders())
+            return
+        if route == "/api/theme":
+            # The commander's real in-game HUD colours, so the app matches the
+            # game. None means no re-tint was found; the UI keeps its own palette.
+            try:
+                pal = game_theme.detect()
+            except Exception as e:                # never let theming break boot
+                self._send_json({"ok": False, "reason": f"{type(e).__name__}"})
+                return
+            self._send_json({"ok": bool(pal), "palette": pal})
             return
         if route == "/api/locate":
             q = parse_qs(parsed.query)

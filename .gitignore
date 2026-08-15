@@ -1,5 +1,6 @@
-# Build artifacts
+# Build artifacts (PyInstaller)
 /build/
+/dist/
 /.venv/
 *.spec
 
@@ -7,10 +8,5 @@
 __pycache__/
 *.pyc
 
-# Local user state (never publish: selected commander / API keys)
+# Local user state — selected commander and any API keys
 config.json
-src/config.json
-
-# In-development feature, not shipped yet (see scripts/make_public.py)
-src/api_clients.py
-src/frontier_oauth.py
