@@ -22,10 +22,10 @@ import json
 import os
 import sys
 import threading
+import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-import browser_launch
 import codex_parser
 import game_theme
 import journal_parser
@@ -464,7 +464,7 @@ def main():
     print("Leave this window open. Press Ctrl+C to stop.\n")
     # The desktop client opens its own app window, so it sets ED_NO_BROWSER.
     if not os.environ.get("ED_NO_BROWSER"):
-        threading.Timer(0.6, lambda: browser_launch.open_url(url)).start()
+        threading.Timer(0.6, lambda: webbrowser.open(url)).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:

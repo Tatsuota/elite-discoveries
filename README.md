@@ -62,6 +62,20 @@ is neither required nor sufficient for Codex data. Codex = journals, full stop.
 
 ## Run it
 
+### Just want to try it? (no build, no Python)
+
+**`Elite Discoveries.exe` is already in this repo** — download it and
+double-click. That's the whole install.
+
+> **Windows will warn you the first time.** The app isn't code-signed, so
+> SmartScreen shows a blue *"Windows protected your PC"* screen. Click
+> **More info → Run anyway**. You only have to do this once. Some antivirus
+> tools also flag single-file Python builds; it's a false positive.
+
+It reads your Elite Dangerous journal files from your own machine and sends
+nothing anywhere — there's no account, no API key, and no network access at
+all. On first launch you pick which commander to read.
+
 ### As a standalone app (recommended — no Python needed to run)
 
 1. Run **`scripts\build_exe.bat`** once. It builds **`Elite Discoveries.exe`**
@@ -222,3 +236,9 @@ The Codex category colours — blue water, green ammonia, cyan water+ammonia, pi
 anomaly — are deliberately *not* re-tinted. They encode what a body is, so
 pushing them all toward one accent would erase the distinction they exist to
 draw.
+
+## Licence
+
+MIT — see [LICENSE](LICENSE). Elite Dangerous is a trademark of Frontier
+Developments plc; this is an unofficial fan-made tool and is not affiliated
+with or endorsed by Frontier Developments.
